@@ -869,7 +869,7 @@ ixgbe_disable_intr(struct ixgbe_hw *hw)
 	if (hw->mac.type == ixgbe_mac_82598EB) {
 		IXGBE_WRITE_REG(hw, IXGBE_EIMC, ~0);
 	} else {
-		IXGBE_WRITE_REG(hw, IXGBE_EIMC, 0xFFFF0000);
+		IXGBE_WRITE_REG(hw, IXGBE_EIMC, IXGBE_IRQ_CLEAR_MASK);
 		IXGBE_WRITE_REG(hw, IXGBE_EIMC_EX(0), ~0);
 		IXGBE_WRITE_REG(hw, IXGBE_EIMC_EX(1), ~0);
 	}
@@ -1053,7 +1053,7 @@ ixgbe_swfw_lock_reset(struct ixgbe_hw *hw)
 	 * lock can not be taken it is due to an improper lock of the
 	 * semaphore.
 	 */
-	mask = IXGBE_GSSR_EEP_SM | IXGBE_GSSR_MAC_CSR_SM | IXGBE_GSSR_SW_MNG_SM;
+	mask = IXGBE_GSSR_EEP_SM | IXGBE_GSSR_MAC_CSR_SM;
 	if (ixgbe_acquire_swfw_semaphore(hw, mask) < 0) {
 		PMD_DRV_LOG(DEBUG, "SWFW common locks released");
 	}
@@ -1172,6 +1172,9 @@ eth_ixgbe_dev_init(struct rte_eth_dev *eth_dev, void *init_params __rte_unused)
 		hw->fc.high_water[i] = IXGBE_FC_HI;
 	}
 	hw->fc.send_xon = 1;
+
+	/* Initialize the params, so we don't bit-bang for the checksum if we don't need to */
+	hw->eeprom.ops.init_params(hw);
 
 	/* Make sure we have a good EEPROM before we read from it */
 	diag = ixgbe_validate_eeprom_checksum(hw, &csum);
@@ -4350,11 +4353,20 @@ ixgbe_dev_promiscuous_enable(struct rte_eth_dev *dev)
 {
 	struct ixgbe_hw *hw = IXGBE_DEV_PRIVATE_TO_HW(dev->data->dev_private);
 	uint32_t fctrl;
+	uint32_t rxctrl;
+
+	/* Before modifying FCTRL, RXCTRL.RXEN must be 0 */
+	rxctrl = IXGBE_READ_REG(hw, IXGBE_RXCTRL);
+	rxctrl &= ~IXGBE_RXCTRL_RXEN;
+	IXGBE_WRITE_REG(hw, IXGBE_RXCTRL, rxctrl);
 
 	fctrl = IXGBE_READ_REG(hw, IXGBE_FCTRL);
 	fctrl |= (IXGBE_FCTRL_UPE | IXGBE_FCTRL_MPE);
 	IXGBE_WRITE_REG(hw, IXGBE_FCTRL, fctrl);
 
+	/* Re-enable RXEN now */
+	rxctrl |= IXGBE_RXCTRL_RXEN;
+	IXGBE_WRITE_REG(hw, IXGBE_RXCTRL, rxctrl);
 	return 0;
 }
 
@@ -4363,6 +4375,12 @@ ixgbe_dev_promiscuous_disable(struct rte_eth_dev *dev)
 {
 	struct ixgbe_hw *hw = IXGBE_DEV_PRIVATE_TO_HW(dev->data->dev_private);
 	uint32_t fctrl;
+	uint32_t rxctrl;
+
+	/* Before modifying FCTRL, RXCTRL.RXEN must be 0 */
+	rxctrl = IXGBE_READ_REG(hw, IXGBE_RXCTRL);
+	rxctrl &= ~IXGBE_RXCTRL_RXEN;
+	IXGBE_WRITE_REG(hw, IXGBE_RXCTRL, rxctrl);
 
 	fctrl = IXGBE_READ_REG(hw, IXGBE_FCTRL);
 	fctrl &= (~IXGBE_FCTRL_UPE);
@@ -4372,6 +4390,9 @@ ixgbe_dev_promiscuous_disable(struct rte_eth_dev *dev)
 		fctrl &= (~IXGBE_FCTRL_MPE);
 	IXGBE_WRITE_REG(hw, IXGBE_FCTRL, fctrl);
 
+	/* Re-enable RXEN now */
+	rxctrl |= IXGBE_RXCTRL_RXEN;
+	IXGBE_WRITE_REG(hw, IXGBE_RXCTRL, rxctrl);
 	return 0;
 }
 
@@ -4380,10 +4401,21 @@ ixgbe_dev_allmulticast_enable(struct rte_eth_dev *dev)
 {
 	struct ixgbe_hw *hw = IXGBE_DEV_PRIVATE_TO_HW(dev->data->dev_private);
 	uint32_t fctrl;
+	uint32_t rxctrl;
+
+	/* Before modifying FCTRL, RXCTRL.RXEN must be 0 */
+	rxctrl = IXGBE_READ_REG(hw, IXGBE_RXCTRL);
+	rxctrl &= ~IXGBE_RXCTRL_RXEN;
+	IXGBE_WRITE_REG(hw, IXGBE_RXCTRL, rxctrl);
 
 	fctrl = IXGBE_READ_REG(hw, IXGBE_FCTRL);
 	fctrl |= IXGBE_FCTRL_MPE;
 	IXGBE_WRITE_REG(hw, IXGBE_FCTRL, fctrl);
+
+	/* Re-enable RXEN now */
+	rxctrl |= IXGBE_RXCTRL_RXEN;
+	IXGBE_WRITE_REG(hw, IXGBE_RXCTRL, rxctrl);
+ 	IXGBE_WRITE_REG(hw, IXGBE_FCTRL, fctrl);
 
 	return 0;
 }
@@ -4393,13 +4425,23 @@ ixgbe_dev_allmulticast_disable(struct rte_eth_dev *dev)
 {
 	struct ixgbe_hw *hw = IXGBE_DEV_PRIVATE_TO_HW(dev->data->dev_private);
 	uint32_t fctrl;
+	uint32_t rxctrl;
 
 	if (dev->data->promiscuous == 1)
 		return 0; /* must remain in all_multicast mode */
 
+	/* Before modifying FCTRL, RXCTRL.RXEN must be 0 */
+	rxctrl = IXGBE_READ_REG(hw, IXGBE_RXCTRL);
+	rxctrl &= ~IXGBE_RXCTRL_RXEN;
+	IXGBE_WRITE_REG(hw, IXGBE_RXCTRL, rxctrl);
+
 	fctrl = IXGBE_READ_REG(hw, IXGBE_FCTRL);
 	fctrl &= (~IXGBE_FCTRL_MPE);
 	IXGBE_WRITE_REG(hw, IXGBE_FCTRL, fctrl);
+
+	/* Re-enable RXEN now */
+	rxctrl |= IXGBE_RXCTRL_RXEN;
+	IXGBE_WRITE_REG(hw, IXGBE_RXCTRL, rxctrl);
 
 	return 0;
 }

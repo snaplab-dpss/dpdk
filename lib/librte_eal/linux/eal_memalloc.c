@@ -576,11 +576,11 @@ alloc_seg(struct rte_memseg *ms, void *addr, int socket_id,
 		 */
 		goto unmapped;
 	}
-	if (va != addr) {
-		RTE_LOG(DEBUG, EAL, "%s(): wrong mmap() address\n", __func__);
-		munmap(va, alloc_sz);
-		goto resized;
-	}
+
+	/* According to the manual, addr parameter to mmap is a hint anyway
+	 * so we should take the address we are given.
+	 */
+	addr = va;
 
 	/* In linux, hugetlb limitations, like cgroup, are
 	 * enforced at fault time instead of mmap(), even

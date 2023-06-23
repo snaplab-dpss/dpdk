@@ -650,8 +650,10 @@ ixgbe_xmit_fixed_burst_vec(void *tx_queue, struct rte_mbuf **tx_pkts,
 	/* cross rx_thresh boundary is not allowed */
 	nb_pkts = RTE_MIN(nb_pkts, txq->tx_rs_thresh);
 
+#ifndef KLEE_VERIFICATION
 	if (txq->nb_tx_free < txq->tx_free_thresh)
 		ixgbe_tx_free_bufs(txq);
+#endif
 
 	nb_commit = nb_pkts = (uint16_t)RTE_MIN(txq->nb_tx_free, nb_pkts);
 	if (unlikely(nb_pkts == 0))
@@ -661,7 +663,9 @@ ixgbe_xmit_fixed_burst_vec(void *tx_queue, struct rte_mbuf **tx_pkts,
 	txdp = &txq->tx_ring[tx_id];
 	txep = &txq->sw_ring_v[tx_id];
 
+#ifndef KLEE_VERIFICATION
 	txq->nb_tx_free = (uint16_t)(txq->nb_tx_free - nb_pkts);
+#endif
 
 	n = (uint16_t)(txq->nb_tx_desc - tx_id);
 	if (nb_commit >= n) {
@@ -695,7 +699,10 @@ ixgbe_xmit_fixed_burst_vec(void *tx_queue, struct rte_mbuf **tx_pkts,
 			txq->tx_rs_thresh);
 	}
 
+	txq->tx_tail = 0;
+#ifndef KLEE_VERIFICATION
 	txq->tx_tail = tx_id;
+#endif
 
 	IXGBE_PCI_REG_WRITE(txq->tdt_reg_addr, txq->tx_tail);
 

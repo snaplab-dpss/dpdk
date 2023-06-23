@@ -613,7 +613,9 @@ rte_mbuf_raw_free(struct rte_mbuf *m)
 	RTE_ASSERT(m->next == NULL);
 	RTE_ASSERT(m->nb_segs == 1);
 	__rte_mbuf_sanity_check(m, 0);
+#ifndef KLEE_VERIFICATION
 	rte_mempool_put(m->pool, m);
+#endif
 }
 
 /**

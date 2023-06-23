@@ -1572,9 +1572,11 @@ ixgbe_rx_scan_hw_ring(struct ixgbe_rx_queue *rxq)
 	}
 
 	/* clear software ring entries so we can cleanup correctly */
+#ifndef KLEE_VERIFICATION
 	for (i = 0; i < nb_rx; ++i) {
 		rxq->sw_ring[rxq->rx_tail + i].mbuf = NULL;
 	}
+#endif
 
 
 	return nb_rx;
@@ -1662,7 +1664,9 @@ rx_recv_pkts(void *rx_queue, struct rte_mbuf **rx_pkts,
 	/* update internal queue state */
 	rxq->rx_next_avail = 0;
 	rxq->rx_nb_avail = nb_rx;
+#ifndef KLEE_VERIFICATION
 	rxq->rx_tail = (uint16_t)(rxq->rx_tail + nb_rx);
+#endif
 
 	/* if required, allocate new buffers to replenish descriptors */
 	if (rxq->rx_tail > rxq->rx_free_trigger) {
@@ -1696,8 +1700,10 @@ rx_recv_pkts(void *rx_queue, struct rte_mbuf **rx_pkts,
 					    cur_free_trigger);
 	}
 
+#ifndef KLEE_VERIFICATION
 	if (rxq->rx_tail >= rxq->nb_rx_desc)
 		rxq->rx_tail = 0;
+#endif
 
 	/* received any packets this loop? */
 	if (rxq->rx_nb_avail)
@@ -1840,7 +1846,9 @@ ixgbe_recv_pkts(void *rx_queue, struct rte_mbuf **rx_pkts,
 		}
 
 		rxm = rxe->mbuf;
+#ifndef KLEE_VERIFICATION
 		rxe->mbuf = nmb;
+#endif
 		dma_addr =
 			rte_cpu_to_le_64(rte_mbuf_data_iova_default(nmb));
 		rxdp->read.hdr_addr = 0;
@@ -1898,7 +1906,9 @@ ixgbe_recv_pkts(void *rx_queue, struct rte_mbuf **rx_pkts,
 		 */
 		rx_pkts[nb_rx++] = rxm;
 	}
+#ifndef KLEE_VERIFICATION
 	rxq->rx_tail = rx_id;
+#endif
 
 	/*
 	 * If the number of free RX descriptors is greater than the RX free
@@ -2140,13 +2150,18 @@ next_desc:
 			 * Update RX descriptor with the physical address of the
 			 * new data buffer of the new allocated mbuf.
 			 */
+#ifndef KLEE_VERIFICATION
 			rxe->mbuf = nmb;
+#endif
 
 			rxm->data_off = RTE_PKTMBUF_HEADROOM;
 			rxdp->read.hdr_addr = 0;
 			rxdp->read.pkt_addr = dma;
-		} else
+		} else {
+#ifndef KLEE_VERIFICATION
 			rxe->mbuf = NULL;
+#endif
+		}
 
 		/*
 		 * Set data length & data buffer address of mbuf.
@@ -2242,10 +2257,12 @@ next_desc:
 		rx_pkts[nb_rx++] = first_seg;
 	}
 
+#ifndef KLEE_VERIFICATION
 	/*
 	 * Record index of the next RX descriptor to probe.
 	 */
 	rxq->rx_tail = rx_id;
+#endif
 
 	/*
 	 * If the number of free RX descriptors is greater than the RX free
@@ -2804,7 +2821,9 @@ ixgbe_rx_queue_release_mbufs(struct ixgbe_rx_queue *rxq)
 		for (i = 0; i < rxq->nb_rx_desc; i++) {
 			if (rxq->sw_ring[i].mbuf != NULL) {
 				rte_pktmbuf_free_seg(rxq->sw_ring[i].mbuf);
+#ifndef KLEE_VERIFICATION
 				rxq->sw_ring[i].mbuf = NULL;
+#endif
 			}
 		}
 		if (rxq->rx_nb_avail) {
@@ -5016,8 +5035,9 @@ ixgbe_dev_rx_init(struct rte_eth_dev *dev)
 	/* Enable receipt of broadcasted frames */
 	fctrl = IXGBE_READ_REG(hw, IXGBE_FCTRL);
 	fctrl |= IXGBE_FCTRL_BAM;
-	fctrl |= IXGBE_FCTRL_DPF;
-	fctrl |= IXGBE_FCTRL_PMCF;
+	// FIXME these are bits 1 and 0 of MFLCN (0x04294) for the 82599
+	//fctrl |= IXGBE_FCTRL_DPF;
+	//fctrl |= IXGBE_FCTRL_PMCF;
 	IXGBE_WRITE_REG(hw, IXGBE_FCTRL, fctrl);
 
 	/*
@@ -5147,6 +5167,12 @@ ixgbe_dev_rx_init(struct rte_eth_dev *dev)
 		else
 			rdrxctl |= IXGBE_RDRXCTL_CRCSTRIP;
 		rdrxctl &= ~IXGBE_RDRXCTL_RSCFRSTSIZE;
+		// Section 8.2.3.8.8
+		// "Software should set [RSCACKC, bit 25] to 1"
+		rdrxctl |= IXGBE_RDRXCTL_RSCACKC;
+		// "Software should set [FCOE_WRFIX, bit 26] to 1"
+		rdrxctl |= IXGBE_RDRXCTL_FCOE_WRFIX;
+
 		IXGBE_WRITE_REG(hw, IXGBE_RDRXCTL, rdrxctl);
 	}
 

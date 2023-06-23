@@ -419,6 +419,8 @@ struct ixgbe_nvm_version {
 				 (0x0A200 + ((_i) * 8)))
 #define IXGBE_RAH(_i)		(((_i) <= 15) ? (0x05404 + ((_i) * 8)) : \
 				 (0x0A204 + ((_i) * 8)))
+#define IXGBE_RAL_82599(_i)	(0x0A200 + ((_i) * 8))
+#define IXGBE_RAH_82599(_i)	(0x0A204 + ((_i) * 8))
 #define IXGBE_MPSAR_LO(_i)	(0x0A600 + ((_i) * 8))
 #define IXGBE_MPSAR_HI(_i)	(0x0A604 + ((_i) * 8))
 /* Packet split receive type */
@@ -2022,7 +2024,7 @@ enum {
 #define IXGBE_FTQF_QUEUE_ENABLE		0x80000000
 
 /* Interrupt clear mask */
-#define IXGBE_IRQ_CLEAR_MASK	0xFFFFFFFF
+#define IXGBE_IRQ_CLEAR_MASK	0x7FFFFFFF
 
 /* Interrupt Vector Allocation Registers */
 #define IXGBE_IVAR_REG_NUM		25

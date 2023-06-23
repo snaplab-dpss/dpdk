@@ -15,6 +15,9 @@
 #define IXGBE_82599_VFT_TBL_SIZE  128
 #define IXGBE_82599_RX_PB_SIZE	  512
 
+STATIC s32 ixgbe_get_mac_addr_82599(struct ixgbe_hw *hw,
+				    u8 *mac_addr);
+
 STATIC s32 ixgbe_setup_copper_link_82599(struct ixgbe_hw *hw,
 					 ixgbe_link_speed speed,
 					 bool autoneg_wait_to_complete);
@@ -313,6 +316,7 @@ s32 ixgbe_init_ops_82599(struct ixgbe_hw *hw)
 	mac->ops.read_analog_reg8 = ixgbe_read_analog_reg8_82599;
 	mac->ops.write_analog_reg8 = ixgbe_write_analog_reg8_82599;
 	mac->ops.start_hw = ixgbe_start_hw_82599;
+	mac->ops.get_mac_addr = ixgbe_get_mac_addr_82599;
 	mac->ops.get_san_mac_addr = ixgbe_get_san_mac_addr_generic;
 	mac->ops.set_san_mac_addr = ixgbe_set_san_mac_addr_generic;
 	mac->ops.get_device_caps = ixgbe_get_device_caps_generic;
@@ -2103,6 +2107,35 @@ s32 ixgbe_start_hw_82599(struct ixgbe_hw *hw)
 		ret_val = ixgbe_verify_fw_version_82599(hw);
 out:
 	return ret_val;
+}
+
+/**
+ *  ixgbe_get_mac_addr_82599 - Get MAC address
+ *  @hw: pointer to hardware structure
+ *  @mac_addr: Adapter MAC address
+ *
+ *  Reads the adapter's MAC address from first Receive Address Register (RAR0)
+ *  A reset of the adapter must be performed prior to calling this function
+ *  in order for the MAC address to have been loaded from the EEPROM into RAR0
+ **/
+s32 ixgbe_get_mac_addr_82599(struct ixgbe_hw *hw, u8 *mac_addr)
+{
+	u32 rar_high;
+	u32 rar_low;
+	u16 i;
+
+	DEBUGFUNC("ixgbe_get_mac_addr_generic");
+
+	rar_high = IXGBE_READ_REG(hw, IXGBE_RAH_82599(0));
+	rar_low = IXGBE_READ_REG(hw, IXGBE_RAL_82599(0));
+
+	for (i = 0; i < 4; i++)
+		mac_addr[i] = (u8)(rar_low >> (i*8));
+
+	for (i = 0; i < 2; i++)
+		mac_addr[i+4] = (u8)(rar_high >> (i*8));
+
+	return IXGBE_SUCCESS;
 }
 
 /**
