@@ -33,3 +33,11 @@ build-*
 # ignore other build directory patterns
 *-gcc*
 *-clang*
+
+# ignore built files
+bin
+sbin
+include
+share
+*.a
+lib/modules/
